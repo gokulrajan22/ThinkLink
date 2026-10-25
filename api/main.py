@@ -35,6 +35,11 @@ class AnalyzeRequest(BaseModel):
     student_slugs: list[str] = Field(min_length=1, max_length=20)
 
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "think-link", "docs": "/docs", "health": "/health"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "thinklink-api", "version": "v1"}
