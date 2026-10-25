@@ -1,0 +1,135 @@
+import os
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.shortcuts import render
+from django.views.decorators.http import require_POST
+
+from .ai_service import analyze_problem
+from .github_service import analyze_github_user, GitHubServiceError
+from .models import StudentProfile, TeamAnalysis
+from .views_skill_catalog import SKILL_CATALOG
+
+
+def _label(skill):
+    return SKILL_CATALOG.get(skill, skill.replace("_", " ").title())
+
+
+def _visible_students(user):
+    return StudentProfile.objects.filter(Q(is_demo=True) | Q(owner=user)).distinct()
+
+
+def _dashboard_context(request, analysis=None, idea=None, title=None, selected_ids=None, github_result=None, github_error=None, github_username=""):
+    students = list(_visible_students(request.user))
+    own_profile = StudentProfile.objects.filter(owner=request.user).first()
+    if selected_ids is None:
+        selected_ids = ["maya", "arjun", "isha"]
+    selected_ids = [sid for sid in selected_ids if any(s.slug == sid for s in students)]
+    team = [s for s in students if s.slug in selected_ids]
+    if idea is None:
+        idea = ("Build an AI-powered campus opportunity platform with personalized recommendations, "
+                "a searchable web dashboard, and secure student project data.")
+    if title is None:
+        title = "Campus Opportunity AI"
+    return {
+        "students": students, "team": team, "selected_ids": selected_ids,
+        "idea": idea, "title": title, "analysis": analysis,
+        "ai_configured": bool(os.getenv("GROQ_API_KEY", "").strip()),
+        "github_result": github_result, "github_error": github_error,
+        "github_username": github_username, "own_profile": own_profile,
+    }
+
+
+@login_required
+def dashboard(request):
+    analysis = None
+    if request.method == "POST" and request.POST.get("action") == "analyze":
+        selected_ids = request.POST.getlist("team")
+        idea = request.POST.get("idea", "").strip()[:8000]
+        title = request.POST.get("title", "").strip()[:200] or "Untitled project"
+        if not idea:
+            messages.error(request, "Add a problem statement before analyzing your team.")
+        elif not selected_ids:
+            messages.error(request, "Select at least one student to analyze a hypothetical team.")
+        else:
+            requirements, ai_notice = analyze_problem(idea)
+            students = list(_visible_students(request.user).filter(slug__in=selected_ids))
+            if not students:
+                messages.error(request, "Select at least one available student profile.")
+            else:
+                required = requirements["required_skills"]
+                covered, gaps, details = [], [], []
+                for skill in required:
+                    matches = [s for s in students if skill in (s.skills or {}) or skill in (s.github_skill_evidence or {})]
+                    if matches:
+                        covered.append(skill)
+                        details.append({"skill": _label(skill), "status": "covered",
+                                        "people": ", ".join(s.name.split()[0] for s in matches)})
+                    else:
+                        gaps.append(skill)
+                        details.append({"skill": _label(skill), "status": "gap", "people": ""})
+                score = round(100 * len(covered) / max(len(required), 1))
+                recommendations = []
+                for student in _visible_students(request.user).exclude(slug__in=selected_ids):
+                    overlap = [skill for skill in gaps if skill in (student.skills or {}) or skill in (student.github_skill_evidence or {})]
+                    if overlap:
+                        recommendations.append({"student": student, "skills": [_label(x) for x in overlap]})
+                recommendations.sort(key=lambda x: len(x["skills"]), reverse=True)
+                strengths = []
+                for student in students:
+                    aligned = [_label(skill) for skill in required if skill in (student.skills or {}) or skill in (student.github_skill_evidence or {})]
+                    if aligned:
+                        note = f"Self-reported skills and/or public GitHub evidence align with {', '.join(aligned[:4])}."
+                    else:
+                        note = "No direct self-reported skill match detected; this is not evidence that the student lacks the ability."
+                    strengths.append({"student": student, "aligned": aligned, "note": note})
+                analysis = {
+                    "score": score, "required": [_label(s) for s in required],
+                    "covered": [_label(s) for s in covered], "gaps": [_label(s) for s in gaps],
+                    "details": details, "recommendations": recommendations[:3],
+                    "strengths": strengths, "team_size": len(students),
+                    "roles": requirements.get("roles", []),
+                    "problem_summary": requirements.get("problem_summary", ""),
+                    "reasoning": requirements.get("reasoning", ""),
+                    "source": requirements.get("analysis_source", "rules"),
+                    "ai_notice": ai_notice,
+                }
+                TeamAnalysis.objects.create(
+                    owner=request.user, title=title, problem_statement=idea,
+                    selected_students=[s.slug for s in students],
+                    required_skills=analysis["required"], covered_skills=analysis["covered"],
+                    missing_skills=analysis["gaps"], coverage_score=score,
+                    analysis_source=analysis["source"],
+                )
+    elif request.method == "POST":
+        selected_ids = request.POST.getlist("team") or ["maya", "arjun", "isha"]
+        idea = request.POST.get("idea", "").strip()[:8000] or None
+        title = request.POST.get("title", "").strip()[:200] or None
+    else:
+        selected_ids = ["maya", "arjun", "isha"]
+        idea = None
+        title = None
+    context = _dashboard_context(request, analysis, idea, title, selected_ids)
+    return render(request, "core/dashboard.html", context)
+
+
+@login_required
+@require_POST
+def github_analyze(request):
+    username = request.POST.get("github_username", "").strip()
+    try:
+        result = analyze_github_user(username)
+        # Never let a user attach GitHub evidence to another person's profile.
+        selected_slug = request.POST.get("student_slug", "").strip()
+        profile = StudentProfile.objects.filter(owner=request.user).first() if selected_slug else None
+        if profile and selected_slug == profile.slug:
+            profile.github_username = result["username"]
+            profile.github_skill_evidence = {item["skill_id"]: item["evidence"] for item in result["inferred_skills"]}
+            profile.save(update_fields=["github_username", "github_skill_evidence", "updated_at"])
+        elif selected_slug:
+            messages.error(request, "You can associate GitHub evidence only with your own profile.")
+        context = _dashboard_context(request, github_result=result, github_username=username)
+    except GitHubServiceError as exc:
+        context = _dashboard_context(request, github_error=str(exc), github_username=username)
+    return render(request, "core/dashboard.html", context)
