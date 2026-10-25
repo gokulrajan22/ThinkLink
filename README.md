@@ -94,3 +94,4 @@ The key must stay server-side in .env or a secrets manager. Never paste it into 
 - No ChromaDB is used: semantic/vector retrieval is not currently needed.
 - Email verification (including resend), password reset, password-confirmed account deletion, JSON data export, profile correction, GitHub-evidence removal, explicit privacy/GitHub consent, persistent database-backed rate limiting, request-size limits, and rate-limit cleanup command are implemented. SMTP and deployment-host verification remain environment-dependent.
 "# ThinkLink" 
+"# ThinkLink" 
