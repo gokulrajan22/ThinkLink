@@ -21,6 +21,7 @@ class ProfileForm(forms.Form):
         help_text="One skill per line as skill-id=level (1–5), e.g. python=3 or machine learning=4.",
         widget=forms.Textarea(attrs={"rows": 7}),
     )
+    clear_github_evidence = forms.BooleanField(required=False, label="Remove my saved GitHub username and derived evidence.")
 
     def clean_skills_text(self):
         raw = self.cleaned_data.get("skills_text", "")
@@ -65,6 +66,7 @@ def edit_profile(request):
         "contribution": profile.contribution, "availability": profile.availability,
         "interests": ", ".join(profile.interests or []),
         "skills_text": "\n".join(f"{key}={level}" for key, level in (profile.skills or {}).items()),
+        "clear_github_evidence": False,
     }
     form = ProfileForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
@@ -77,9 +79,12 @@ def edit_profile(request):
         profile.availability = data["availability"].strip()
         profile.interests = [item.strip() for item in data["interests"].split(",") if item.strip()]
         profile.skills = form.cleaned_skills
+        if data["clear_github_evidence"]:
+            profile.github_username = ""
+            profile.github_skill_evidence = {}
         profile.save(update_fields=[
             "name", "initials", "college", "year", "contribution", "availability",
-            "interests", "skills", "updated_at",
+            "interests", "skills", "github_username", "github_skill_evidence", "updated_at",
         ])
         messages.success(request, "Your ThinkLink profile was updated.")
         return redirect("dashboard")

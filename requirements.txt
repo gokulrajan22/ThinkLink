@@ -6,3 +6,4 @@ psycopg[binary]>=3.2.0
 dj-database-url>=2.3.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.34.0
+whitenoise>=6.9.0,<7.0

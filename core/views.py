@@ -10,6 +10,7 @@ from .ai_service import analyze_problem
 from .github_service import analyze_github_user, GitHubServiceError
 from .models import StudentProfile, TeamAnalysis
 from .views_skill_catalog import SKILL_CATALOG
+from .security import rate_limit
 
 
 def _label(skill):
@@ -42,6 +43,7 @@ def _dashboard_context(request, analysis=None, idea=None, title=None, selected_i
 
 
 @login_required
+@rate_limit("team-analysis", 20, 3600)
 def dashboard(request):
     analysis = None
     if request.method == "POST" and request.POST.get("action") == "analyze":
@@ -116,8 +118,13 @@ def dashboard(request):
 
 @login_required
 @require_POST
+@rate_limit("github-analysis", 10, 3600)
 def github_analyze(request):
     username = request.POST.get("github_username", "").strip()
+    if request.POST.get("github_consent") != "yes":
+        return render(request, "core/dashboard.html", _dashboard_context(
+            request, github_error="Please confirm that you consent to inspection of public GitHub repository metadata and a bounded source-file sample.",
+            github_username=username))
     try:
         result = analyze_github_user(username)
         # Never let a user attach GitHub evidence to another person's profile.

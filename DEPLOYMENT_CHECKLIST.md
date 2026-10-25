@@ -11,10 +11,10 @@
 - [x] Saved team analyses have an owner and are only returned to that owner.
 - [x] GitHub skill evidence can only be associated with the signed-in user's own profile.
 - [x] Separate FastAPI data endpoints fail closed without a configured bearer token.
-- [ ] Add login/signup rate limiting and abuse monitoring.
-- [ ] Add email verification, password reset, and account deletion.
+- [x] Add persistent database-backed IP/account rate limits for login, signup, password reset, team analysis and GitHub inspection; log abuse events with hashed IP indicators.
+- [x] Add email verification (24-hour signed token), password reset, and password-confirmed account deletion.
 - [x] Add profile editing for the signed-in user's own skills/interests and availability.
-- [ ] Add user-facing data export/correction.
+- [x] Add user-facing JSON data export, profile correction, and saved GitHub evidence removal.
 
 ## Environment and Django security
 
@@ -22,6 +22,7 @@
 - [x] Production secure cookies, HTTPS redirect, HSTS, content-type protection, and frame denial configured.
 - [x] CSRF trusted origins configurable.
 - [x] PostgreSQL connection lifetime defaults to zero on Vercel serverless runtime.
+- [x] Fail production startup unless DJANGO_SECRET_KEY, explicit hosts, HTTPS CSRF origins, persistent PostgreSQL and SMTP credentials are configured.
 - [ ] Set real production DJANGO_SECRET_KEY in Vercel's secret environment.
 - [ ] Set exact DJANGO_ALLOWED_HOSTS and DJANGO_CSRF_TRUSTED_ORIGINS values after the Vercel hostname exists.
 - [ ] Verify Vercel forwarded HTTPS behavior and python manage.py check --deploy in the production environment.
@@ -30,9 +31,9 @@
 
 ## Privacy and operational safety — release blockers
 
-- [ ] Add a clear privacy notice and consent before processing personal profile data and public GitHub evidence.
-- [ ] Define retention, deletion, and correction workflows for profile data and generated analyses.
-- [ ] Add persistent/distributed rate limiting and request-size limits for expensive AI/GitHub routes.
+- [x] Add a public Privacy Notice; require consent to profile/project-brief processing at registration and explicit consent for each GitHub inspection.
+- [x] Define retention and provide deletion, correction, and JSON export controls; live account deletion cascades owned profile and analyses.
+- [x] Add persistent database-backed rate limits and a 64 KiB request-body limit.
 - [ ] Review API payloads for personal-data minimization and verify every endpoint's authorization.
 - [ ] Add security/dependency scanning and deployment monitoring.
 - [ ] Keep demo seed data out of production unless deliberately approved.
@@ -43,6 +44,8 @@
 - [x] Added .python-version (Python 3.12).
 - [x] Added Vercel deployment instructions in VERCEL_DEPLOYMENT.md.
 - [ ] Review repository for secrets and generated database files.
+- [ ] Configure SMTP delivery, test verification and password reset with the real sender domain.
+- [ ] Schedule `python manage.py cleanup_rate_limits` and confirm logs/alerts are monitored.
 - [ ] Create/push the GitHub repository named ThinkLink after the user confirms the target repository/account.
 - [ ] Import that repository into Vercel and configure production/preview environment variables.
 - [ ] Apply migrations to the intended production database through a controlled release step.

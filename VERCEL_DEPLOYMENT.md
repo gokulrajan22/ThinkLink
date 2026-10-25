@@ -26,7 +26,8 @@ After the repository is reviewed and pushed to the user's GitHub account:
    - DJANGO_ALLOWED_HOSTS: exact production hostname(s), including the assigned .vercel.app hostname; no wildcard.
    - DJANGO_CSRF_TRUSTED_ORIGINS: exact HTTPS origin(s), for example https://your-project.vercel.app (replace with the actual hostname).
    - DJANGO_SECURE_SSL_REDIRECT=True
-   - DATABASE_URL: PostgreSQL connection string suitable for serverless functions, with TLS.
+   - DATABASE_URL: persistent PostgreSQL connection string suitable for serverless functions, with TLS.
+   - EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS, DEFAULT_FROM_EMAIL: a verified SMTP sender for account verification and password recovery. Production startup fails closed if these are missing.
    - GROQ_API_KEY and GROQ_MODEL only if AI-assisted analysis is enabled.
    - GITHUB_TOKEN only if needed for public GitHub API rate limits.
 5. Do not set INTERNAL_API_TOKEN unless the separate FastAPI service is actually deployed and needs to be protected.
@@ -34,6 +35,8 @@ After the repository is reviewed and pushed to the user's GitHub account:
 7. Run migrations against the intended production database as a controlled release step; do not automatically seed demo data into production.
 8. Verify static assets, sign-up, sign-in, sign-out, CSRF, private analysis isolation, database writes, logs, and the deployment health check.
 9. Keep preview deployments on a separate database or isolated schema so test data and migrations cannot affect production.
+10. Run `python manage.py cleanup_rate_limits` on a regular maintenance schedule (e.g. daily/weekly) to delete rate-limit records inactive for 30 days. Do not schedule this until the database and deployment secrets are available to the scheduler.
+11. Confirm the email provider's domain authentication (SPF/DKIM/DMARC), delivery and bounce handling before opening registration.
 
 ## Important operational notes
 

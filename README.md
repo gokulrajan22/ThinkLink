@@ -63,7 +63,7 @@ The key must stay server-side in .env or a secrets manager. Never paste it into 
 - Neon Free has quotas and may suspend compute after monthly limits are exhausted; verify the current limits before relying on it for a demo. Free tiers and limits can change.
 - The Django web app and FastAPI service share the same ORM models and configured database. The current code is local-development oriented. Production-mode Django settings now fail closed on the built-in development secret and enable secure cookies, HSTS, content-type protection, and HTTPS redirect by default when `DJANGO_DEBUG=False`. Set exact `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` values for the deployed host. HTTPS proxy configuration depends on the selected host; verify it before deployment.
 
-**Public deployment remains blocked** until authentication/authorization, record-level access control, privacy/consent and data deletion flows, API rate limiting, request-size limits, and production hosting configuration are implemented and tested. See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for release blockers and verification steps, and [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for the planned Vercel + GitHub deployment.
+**Public deployment remains blocked** until real SMTP delivery, exact Vercel host/CSRF settings, production secrets, static delivery, backup/restore, repository review, and a full preview deployment are verified. Security, privacy consent, rate limiting, email verification/password reset, account deletion, export, and profile correction are implemented in code. See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) and [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md).
 
 ## Implemented in this prototype
 
@@ -83,7 +83,7 @@ The key must stay server-side in .env or a secrets manager. Never paste it into 
 - Team-analysis snapshots are owned by the signed-in user. The saved-analysis endpoint returns only that user's records.
 - GitHub evidence can only be associated with the current user's own profile.
 - The separate FastAPI service protects data endpoints with `Authorization: Bearer <INTERNAL_API_TOKEN>` and fails closed when the token is not configured. Its health endpoint remains public.
-- Production launch still requires rate limiting, privacy/consent and deletion flows, production environment configuration, and deployment verification. Do not treat the current build as fully production-ready.
+- Production launch still requires verified SMTP, actual Vercel secrets/hostnames, preview smoke tests, database backup/restore review, and GitHub repository review. Do not treat local tests as a substitute for deployment verification.
 
 ## Known limitations
 
@@ -92,4 +92,4 @@ The key must stay server-side in .env or a secrets manager. Never paste it into 
 - GitHub skill inference is a bounded heuristic sample, not a contribution graph or a definitive skill test.
 - Collaboration-style, availability-overlap, and interest matching are not yet part of the numeric coverage score.
 - No ChromaDB is used: semantic/vector retrieval is not currently needed.
-- Email verification, password reset, account deletion, consent and privacy workflows, and abuse/rate limiting are not yet implemented. Complete these before inviting real students.
+- Email verification (including resend), password reset, password-confirmed account deletion, JSON data export, profile correction, GitHub-evidence removal, explicit privacy/GitHub consent, persistent database-backed rate limiting, request-size limits, and rate-limit cleanup command are implemented. SMTP and deployment-host verification remain environment-dependent.

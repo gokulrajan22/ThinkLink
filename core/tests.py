@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -34,12 +35,23 @@ class ThinkLinkAuthAndAccessTests(TestCase):
             "username": "new-student", "full_name": "New Student", "email": "new@example.com",
             "college": "Test College", "year": "1st year",
             "password1": "Long-secure-passphrase-2026", "password2": "Long-secure-passphrase-2026",
+            "privacy_consent": "on",
         })
         self.assertEqual(response.status_code, 302)
         new_user = User.objects.get(username="new-student")
         profile = StudentProfile.objects.get(owner=new_user)
         self.assertFalse(profile.is_demo)
         self.assertEqual(profile.name, "New Student")
+        self.assertFalse(new_user.is_active)
+        self.assertTrue(profile.privacy_consent_at)
+        from django.core import mail
+        self.assertTrue(mail.outbox)
+        import re
+        token = re.search(r"/accounts/verify/([^/]+)/", mail.outbox[-1].body).group(1)
+        verify_response = self.client.get(f"/accounts/verify/{token}/")
+        self.assertEqual(verify_response.status_code, 302)
+        new_user.refresh_from_db()
+        self.assertTrue(new_user.is_active)
 
     def test_profile_edit_updates_only_the_signed_in_users_profile(self):
         response = self.client.post("/profile/", {
@@ -97,7 +109,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.assertEqual(record.selected_students, ["test-student"])
 
     def test_github_invalid_username_is_handled_without_network(self):
-        response = self.client.post("/github/analyze/", {"github_username": "not a valid username"})
+        response = self.client.post("/github/analyze/", {"github_username": "not a valid username", "github_consent": "yes"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "valid GitHub username")
 
@@ -109,7 +121,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
             "inferred_skills": [{"skill_id": "github", "skill": "Git / GitHub workflows", "evidence": ["repository file: package.json"]}],
             "note": "Test evidence only.",
         }
-        response = self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "test-student"})
+        response = self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "test-student", "github_consent": "yes"})
         self.assertEqual(response.status_code, 200)
         self.student.refresh_from_db()
         self.assertEqual(self.student.github_username, "test-gh")
@@ -118,6 +130,49 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         other = User.objects.create_user(username="other-user2", password="Other-strong-password-2026")
         other_profile = StudentProfile.objects.create(owner=other, slug="other-profile", name="Other Student",
                                                        initials="OS", college="Other College", is_demo=False)
-        self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "other-profile"})
+        self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "other-profile", "github_consent": "yes"})
         other_profile.refresh_from_db()
         self.assertEqual(other_profile.github_username, "")
+
+    def test_privacy_notice_is_public_and_account_export_is_private(self):
+        self.client.logout()
+        self.assertEqual(self.client.get("/privacy/").status_code, 200)
+        self.assertEqual(self.client.get("/account/export/").status_code, 302)
+        self.client.force_login(self.user)
+        TeamAnalysis.objects.create(owner=self.user, title="Export test", problem_statement="A private idea")
+        response = self.client.get("/account/export/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        payload = json.loads(response.content)
+        self.assertEqual(payload["account"]["username"], self.user.username)
+        self.assertEqual(payload["team_analyses"][0]["problem_statement"], "A private idea")
+
+    def test_account_deletion_requires_password_and_deletes_owned_records(self):
+        TeamAnalysis.objects.create(owner=self.user, title="Delete me", problem_statement="Private")
+        bad = self.client.post("/account/delete/", {"password": "wrong", "confirm_delete": "DELETE"})
+        self.assertEqual(bad.status_code, 400)
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+        response = self.client.post("/account/delete/", {
+            "password": "Strong-test-password-2026", "confirm_delete": "DELETE",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
+        self.assertFalse(StudentProfile.objects.filter(slug="test-student").exists())
+        self.assertFalse(TeamAnalysis.objects.filter(title="Delete me").exists())
+
+    @patch("core.views.analyze_github_user")
+    def test_github_analysis_requires_explicit_consent(self, github_mock):
+        response = self.client.post("/github/analyze/", {"github_username": "test-gh"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please confirm that you consent")
+        github_mock.assert_not_called()
+
+    def test_password_reset_and_verification_resend_pages_load(self):
+        self.client.logout()
+        self.assertEqual(self.client.get("/accounts/password-reset/").status_code, 200)
+        self.assertEqual(self.client.get("/accounts/verify/resend/").status_code, 200)
+        response = self.client.post("/accounts/verify/resend/", {"email": "nobody@example.com"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/accounts/login/")
+        login_page = self.client.get("/accounts/login/")
+        self.assertContains(login_page, "If that address has an unverified ThinkLink account")
