@@ -49,7 +49,7 @@ def health():
 def list_students():
     return {"results": [
         {"id": s.slug, "name": s.name, "college": s.college, "year": s.year,
-         "skills": s.skills, "interests": s.interests, "availability": s.availability,
+         "email": s.display_email, "skills": s.skills, "interests": s.interests, "availability": s.availability,
          "contribution": s.contribution,
          "github_profile_url": f"https://github.com/{s.github_username}" if s.github_username else None,
          "is_demo": s.is_demo}

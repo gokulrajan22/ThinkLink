@@ -34,6 +34,8 @@ def export_my_data(request):
             "availability": profile.availability, "contribution": profile.contribution,
             "github_username": profile.github_username,
             "github_skill_evidence": profile.github_skill_evidence,
+            "github_projects": profile.github_projects,
+            "share_github_projects": profile.share_github_projects,
             "privacy_consent_at": profile.privacy_consent_at.isoformat() if profile.privacy_consent_at else None,
             "privacy_policy_version": profile.privacy_policy_version,
             "created_at": profile.created_at.isoformat(), "updated_at": profile.updated_at.isoformat(),

@@ -161,11 +161,46 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.assertFalse(TeamAnalysis.objects.filter(title="Delete me").exists())
 
     @patch("core.views.analyze_github_user")
+    def test_github_projects_saved_and_shared_only_on_opt_in(self, github_mock):
+        github_mock.return_value = {
+            "username": "test-gh", "profile_url": "https://github.com/test-gh", "public_repos": 2,
+            "repositories": [
+                {"name": "sample-repo", "url": "https://github.com/test-gh/sample-repo", "language": "Python",
+                 "description": "A short demo project", "updated_at": "2026-01-01"},
+                {"name": "bad-link", "url": "javascript:alert(1)", "language": "", "description": "", "updated_at": ""},
+            ],
+            "inferred_skills": [], "note": "Test evidence only.",
+        }
+        self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "test-student", "github_consent": "yes"})
+        self.student.refresh_from_db()
+        self.assertEqual([p["name"] for p in self.student.github_projects], ["sample-repo"])
+        self.assertFalse(self.student.share_github_projects)
+        self.assertContains(self.client.get("/"), "A short demo project")
+
+        viewer = User.objects.create_user(username="viewer", password="Viewer-strong-password-2026")
+        self.client.force_login(viewer)
+        self.assertNotContains(self.client.get("/"), "A short demo project")
+
+        self.client.force_login(self.user)
+        self.client.post("/github/analyze/", {"github_username": "test-gh", "student_slug": "test-student",
+                                              "github_consent": "yes", "share_github_projects": "yes"})
+        self.client.force_login(viewer)
+        self.assertContains(self.client.get("/"), "A short demo project")
+
+    @patch("core.views.analyze_github_user")
     def test_github_analysis_requires_explicit_consent(self, github_mock):
         response = self.client.post("/github/analyze/", {"github_username": "test-gh"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Please confirm that you consent")
         github_mock.assert_not_called()
+
+    def test_unverified_account_with_correct_password_gets_verification_hint(self):
+        self.client.logout()
+        User.objects.create_user(username="pending", email="p@example.com", password="Pending-strong-password-2026", is_active=False)
+        right = self.client.post("/accounts/login/", {"username": "pending", "password": "Pending-strong-password-2026"})
+        self.assertContains(right, "isn&#x27;t verified yet")
+        wrong = self.client.post("/accounts/login/", {"username": "pending", "password": "wrong-password"})
+        self.assertNotContains(wrong, "verified yet")
 
     def test_password_reset_and_verification_resend_pages_load(self):
         self.client.logout()
