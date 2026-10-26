@@ -1,0 +1,16 @@
+# Never upload secrets, local databases, or the private FastAPI service to Vercel.
+# Without this file the CLI uploaded .env and db.sqlite3, and the "Other" preset served them.
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.db
+*.log
+api/
+staticfiles/
+__pycache__/
+.venv/
+venv/
+.vscode/
+.claude/
+.github/
