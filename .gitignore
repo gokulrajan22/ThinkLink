@@ -17,3 +17,4 @@ staticfiles/
 *.log
 
 .vercel
+.env*.local
