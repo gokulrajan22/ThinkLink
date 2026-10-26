@@ -245,6 +245,8 @@ class CollaborationTests(TestCase):
         self.assertIn("Alice", page)
         self.assertNotIn("Hidden", page)
         self.assertNotIn("Pending", page)
+        self.assertNotIn("alice@example.com", page)  # other students' account emails stay private
+        self.assertIn("owner@example.com", page)  # own email still shown
 
     def test_only_owner_can_invite_and_hidden_users_cannot_be_invited(self):
         self.assertEqual(self.invite(self.alice, "owner").status_code, 404)  # alice does not own the project

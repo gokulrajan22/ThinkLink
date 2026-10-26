@@ -42,7 +42,10 @@ class StudentProfile(models.Model):
 
     @property
     def display_email(self):
-        """Use the account email for a member's own profile, demo address otherwise."""
+        """Use the account email for a member's own profile, demo address otherwise.
+
+        Never render this for another real student: their account email is private (templates gate on
+        is_demo or ownership; students contact each other through ThinkLink messages)."""
         return self.owner.email if self.owner_id else self.contact_email
 
 
