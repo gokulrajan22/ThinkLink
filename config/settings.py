@@ -57,6 +57,7 @@ TEMPLATES = [{
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
+        "core.context_processors.collaboration",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -116,7 +117,11 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in {"1", "true", "yes"}
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "ThinkLink <no-reply@thinklink.invalid>")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "ThinkLink <no-reply@thinklink.invalid>").strip()
+# "ThinkLink me@example.com" is rejected by the mail library; accept it as "ThinkLink <me@example.com>".
+if "<" not in DEFAULT_FROM_EMAIL and " " in DEFAULT_FROM_EMAIL:
+    _from_name, _, _from_address = DEFAULT_FROM_EMAIL.rpartition(" ")
+    DEFAULT_FROM_EMAIL = f"{_from_name.strip()} <{_from_address}>"
 EMAIL_TIMEOUT = 10
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

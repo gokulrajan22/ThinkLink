@@ -1,0 +1,10 @@
+{% extends 'core/app_base.html' %}
+{% block title %}Messages · ThinkLink{% endblock %}{% block breadcrumb %}Messages{% endblock %}
+{% block content %}<section class="page-content collab-page">
+<div class="section-heading"><div><div class="section-kicker">INBOX</div><h2>Messages</h2><p>Direct messages and project team chats. Start a chat with the ✉ button in the student directory.</p></div></div>
+<div class="collab-list">{% for row in rows %}<a class="panel inbox-row{% if row.unread %} unread{% endif %}" href="{% url 'message-thread' row.conversation.pk %}">
+<span class="inbox-icon">{% if row.conversation.project_id %}♧{% else %}✉{% endif %}</span>
+<div class="invite-copy"><strong>{{ row.title }}</strong><p>{% if row.last %}{{ row.last.body|truncatechars:90 }}{% else %}No messages yet{% endif %}</p></div>
+<div class="inbox-meta">{% if row.last %}<small>{{ row.last.created_at|timesince }} ago</small>{% endif %}{% if row.unread %}<span class="count-chip">{{ row.unread }} new</span>{% endif %}</div></a>
+{% empty %}<p class="github-muted">No conversations yet.</p>{% endfor %}</div>
+{% include "core/_footer.html" %}</section>{% endblock %}

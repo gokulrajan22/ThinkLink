@@ -21,6 +21,8 @@ class ProfileForm(forms.Form):
         help_text="One skill per line as skill-id=level (1–5), e.g. python=3 or machine learning=4.",
         widget=forms.Textarea(attrs={"rows": 7}),
     )
+    is_discoverable = forms.BooleanField(required=False, label="Show me in the student directory so other students can message or invite me.")
+    email_notifications = forms.BooleanField(required=False, label="Email me about invites, join requests, and new messages.")
     share_github_projects = forms.BooleanField(required=False, label="Show my saved public GitHub projects to other signed-in students.")
     clear_github_evidence = forms.BooleanField(required=False, label="Remove my saved GitHub username, projects, and derived evidence.")
 
@@ -67,6 +69,8 @@ def edit_profile(request):
         "contribution": profile.contribution, "availability": profile.availability,
         "interests": ", ".join(profile.interests or []),
         "skills_text": "\n".join(f"{key}={level}" for key, level in (profile.skills or {}).items()),
+        "is_discoverable": profile.is_discoverable,
+        "email_notifications": profile.email_notifications,
         "share_github_projects": profile.share_github_projects,
         "clear_github_evidence": False,
     }
@@ -81,6 +85,8 @@ def edit_profile(request):
         profile.availability = data["availability"].strip()
         profile.interests = [item.strip() for item in data["interests"].split(",") if item.strip()]
         profile.skills = form.cleaned_skills
+        profile.is_discoverable = data["is_discoverable"]
+        profile.email_notifications = data["email_notifications"]
         profile.share_github_projects = data["share_github_projects"]
         if data["clear_github_evidence"]:
             profile.github_username = ""
@@ -90,7 +96,7 @@ def edit_profile(request):
         profile.save(update_fields=[
             "name", "initials", "college", "year", "contribution", "availability",
             "interests", "skills", "github_username", "github_skill_evidence", "github_projects",
-            "share_github_projects", "updated_at",
+            "share_github_projects", "is_discoverable", "email_notifications", "updated_at",
         ])
         messages.success(request, "Your ThinkLink profile was updated.")
         return redirect("dashboard")

@@ -1,0 +1,7 @@
+{% extends 'core/app_base.html' %}
+{% block title %}Notifications · ThinkLink{% endblock %}{% block breadcrumb %}Notifications{% endblock %}
+{% block content %}<section class="page-content collab-page">
+<div class="section-heading"><div><div class="section-kicker">ACTIVITY</div><h2>Notifications</h2></div><form method="post" action="{% url 'notifications-read-all' %}">{% csrf_token %}<button class="secondary-button" type="submit">Mark all read</button></form></div>
+<div class="collab-list">{% for note in notes %}<a class="panel inbox-row{% if not note.is_read %} unread{% endif %}" href="{% url 'notification-open' note.pk %}"><div class="invite-copy"><strong>{{ note.text }}</strong></div><div class="inbox-meta"><small>{{ note.created_at|timesince }} ago</small></div></a>
+{% empty %}<p class="github-muted">No notifications yet.</p>{% endfor %}</div>
+{% include "core/_footer.html" %}</section>{% endblock %}

@@ -1,0 +1,17 @@
+{% extends 'core/app_base.html' %}
+{% block title %}{{ title }} · Messages · ThinkLink{% endblock %}{% block breadcrumb %}Messages{% endblock %}
+{% block content %}<section class="page-content collab-page">
+<div class="section-heading"><div><div class="section-kicker">{% if conversation.project_id %}TEAM CHAT{% else %}DIRECT MESSAGE{% endif %}</div><h2>{{ title }}</h2></div><a class="secondary-button" href="{% url 'messages-inbox' %}">← All messages</a></div>
+<div class="panel thread" id="thread" aria-live="polite">{% for m in thread %}<div class="bubble{% if m.sender_id == request.user.pk %} mine{% endif %}" data-id="{{ m.pk }}"><small>{{ m.sender.student_profile.name|default:m.sender.username }} · {{ m.created_at|date:"M j, H:i" }}</small><p>{{ m.body|linebreaksbr }}</p></div>{% empty %}<p class="github-muted" id="thread-empty">Say hello 👋</p>{% endfor %}</div>
+<form class="composer" id="composer" method="post" action="{% url 'message-send' conversation.pk %}">{% csrf_token %}<textarea class="text-area" name="body" id="composer-body" maxlength="2000" required rows="2" placeholder="Write a message… (Enter to send, Shift+Enter for a new line)"></textarea><button class="primary-button small" type="submit">Send</button></form>
+<p class="composer-error" id="composer-error" hidden></p>
+{% include "core/_footer.html" %}</section>{% endblock %}
+{% block scripts %}<script>
+const thread=document.getElementById('thread'),form=document.getElementById('composer'),box=document.getElementById('composer-body'),err=document.getElementById('composer-error');let lastId={{ last_id }};
+// Message bodies are inserted with textContent only, never innerHTML.
+function addBubble(m){if(document.querySelector(`.bubble[data-id="${m.id}"]`))return;document.getElementById('thread-empty')?.remove();const d=document.createElement('div');d.className='bubble'+(m.mine?' mine':'');d.dataset.id=m.id;const meta=document.createElement('small');meta.textContent=m.sender+' · '+new Date(m.created).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});const p=document.createElement('p');p.textContent=m.body;d.append(meta,p);thread.append(d);lastId=Math.max(lastId,m.id);thread.scrollTop=thread.scrollHeight}
+thread.scrollTop=thread.scrollHeight;
+form.addEventListener('submit',async e=>{e.preventDefault();if(!box.value.trim())return;err.hidden=true;const r=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{'Accept':'application/json'},credentials:'same-origin'});const data=await r.json().catch(()=>({error:r.status===429?'You are sending messages too fast. Wait a few minutes.':'Message not sent.'}));if(r.ok){addBubble(data.message);box.value=''}else{err.textContent=data.error||'Message not sent.';err.hidden=false}});
+box.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});
+async function poll(){if(document.visibilityState!=='visible')return;try{const r=await fetch(`{% url 'message-poll' conversation.pk %}?after=${lastId}`,{credentials:'same-origin'});if(r.ok)(await r.json()).messages.forEach(addBubble)}catch(e){}}setInterval(poll,5000);
+</script>{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'core/app_base.html' %}
+{% block title %}Invites · ThinkLink{% endblock %}{% block breadcrumb %}Invites{% endblock %}
+{% block content %}<section class="page-content collab-page">
+<div class="section-heading"><div><div class="section-kicker">YOUR TEAMS</div><h2>Invites &amp; join requests</h2><p>Accept to join a team, or let people into yours.</p></div></div>
+<h3 class="collab-subhead">Waiting for you</h3>
+<div class="collab-list">{% for inv in incoming %}<article class="panel invite-row">
+<span class="avatar avatar-{{ inv.sender.student_profile.color|default:'violet' }}">{{ inv.sender.username|slice:":2"|upper }}</span>
+<div class="invite-copy"><strong>{% if inv.kind == 'invite' %}{{ inv.sender.student_profile.name|default:inv.sender.username }} invited you to “{{ inv.project.title }}”{% else %}{{ inv.sender.student_profile.name|default:inv.sender.username }} wants to join “{{ inv.project.title }}”{% endif %}</strong>
+{% if inv.message %}<p>“{{ inv.message }}”</p>{% endif %}<small>{{ inv.created_at|timesince }} ago</small></div>
+<div class="invite-actions"><form method="post" action="{% url 'invite-respond' inv.pk 'accept' %}">{% csrf_token %}<button class="primary-button small" type="submit">Accept</button></form>
+<form method="post" action="{% url 'invite-respond' inv.pk 'decline' %}">{% csrf_token %}<button class="secondary-button" type="submit">Decline</button></form></div>
+</article>{% empty %}<p class="github-muted">Nothing waiting for you.</p>{% endfor %}</div>
+<h3 class="collab-subhead">Sent by you</h3>
+<div class="collab-list">{% for inv in outgoing %}<article class="panel invite-row">
+<div class="invite-copy"><strong>{% if inv.kind == 'invite' %}Invited {{ inv.recipient.student_profile.name|default:inv.recipient.username }} to “{{ inv.project.title }}”{% else %}Asked to join “{{ inv.project.title }}”{% endif %}</strong><small>Pending · {{ inv.created_at|timesince }} ago</small></div>
+<div class="invite-actions"><form method="post" action="{% url 'invite-respond' inv.pk 'cancel' %}">{% csrf_token %}<button class="secondary-button" type="submit">Cancel</button></form></div>
+</article>{% empty %}<p class="github-muted">No pending invites or requests.</p>{% endfor %}</div>
+{% if history %}<h3 class="collab-subhead">Recent</h3><div class="collab-list">{% for inv in history %}<div class="history-row">{{ inv.get_kind_display }} · “{{ inv.project.title }}” · <span class="status-{{ inv.status }}">{{ inv.get_status_display }}</span></div>{% endfor %}</div>{% endif %}
+{% include "core/_footer.html" %}</section>{% endblock %}
