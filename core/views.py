@@ -21,6 +21,24 @@ def _visible_students(user):
     return StudentProfile.objects.filter(Q(is_demo=True) | Q(owner=user)).distinct()
 
 
+def _safe_projects(repositories):
+    """Keep only display fields and GitHub URLs before persisting repository rows."""
+    projects = []
+    for repo in repositories[:10]:
+        url = str(repo.get("url", ""))
+        if not url.startswith("https://github.com/"):
+            continue
+        projects.append({"name": str(repo.get("name", ""))[:100], "description": str(repo.get("description", ""))[:160],
+                         "url": url[:300], "language": str(repo.get("language", ""))[:40]})
+    return projects
+
+
+def _community_projects(user):
+    """Projects from other students who opted in to sharing their public GitHub repositories."""
+    profiles = StudentProfile.objects.filter(share_github_projects=True).exclude(owner=user).exclude(github_username="")
+    return [p for p in profiles[:30] if p.github_projects]
+
+
 def _dashboard_context(request, analysis=None, idea=None, title=None, selected_ids=None, github_result=None, github_error=None, github_username=""):
     students = list(_visible_students(request.user))
     own_profile = StudentProfile.objects.filter(owner=request.user).first()
@@ -35,6 +53,8 @@ def _dashboard_context(request, analysis=None, idea=None, title=None, selected_i
         title = "Campus Opportunity AI"
     return {
         "students": students, "team": team, "selected_ids": selected_ids,
+        "my_projects": list(TeamAnalysis.objects.filter(owner=request.user)[:8]),
+        "community_projects": _community_projects(request.user),
         "idea": idea, "title": title, "analysis": analysis,
         "ai_configured": bool(os.getenv("GROQ_API_KEY", "").strip()),
         "github_result": github_result, "github_error": github_error,
@@ -133,7 +153,10 @@ def github_analyze(request):
         if profile and selected_slug == profile.slug:
             profile.github_username = result["username"]
             profile.github_skill_evidence = {item["skill_id"]: item["evidence"] for item in result["inferred_skills"]}
-            profile.save(update_fields=["github_username", "github_skill_evidence", "updated_at"])
+            profile.github_projects = _safe_projects(result.get("repositories", []))
+            profile.share_github_projects = request.POST.get("share_github_projects") == "yes"
+            profile.save(update_fields=["github_username", "github_skill_evidence", "github_projects",
+                                        "share_github_projects", "updated_at"])
         elif selected_slug:
             messages.error(request, "You can associate GitHub evidence only with your own profile.")
         context = _dashboard_context(request, github_result=result, github_username=username)

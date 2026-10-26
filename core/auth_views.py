@@ -167,4 +167,11 @@ def sign_in(request):
         if next_url and next_url.startswith("/") and not next_url.startswith("//"):
             return redirect(next_url)
         return redirect("dashboard")
+    if request.method == "POST":
+        # Django rejects inactive accounts with the generic bad-credentials error. Only after the
+        # password checks out, explain that the email still needs verifying.
+        pending = User.objects.filter(username__iexact=request.POST.get("username", "").strip(), is_active=False).first()
+        if pending and pending.check_password(request.POST.get("password", "")):
+            form.errors.clear()
+            form.add_error(None, "Your email address isn't verified yet. Open the link in your verification email, or resend it below.")
     return render(request, "registration/login.html", {"form": form, "next": request.GET.get("next", "")})

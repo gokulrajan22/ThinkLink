@@ -11,6 +11,7 @@ class StudentProfile(models.Model):
     slug = models.SlugField(max_length=60, unique=True)
     name = models.CharField(max_length=120)
     initials = models.CharField(max_length=8)
+    contact_email = models.EmailField(max_length=254, blank=True)
     college = models.CharField(max_length=160, default="ThinkLink Campus")
     year = models.CharField(max_length=80, blank=True)
     skills = models.JSONField(default=dict, blank=True)
@@ -19,6 +20,10 @@ class StudentProfile(models.Model):
     contribution = models.CharField(max_length=120, blank=True)
     github_username = models.CharField(max_length=39, blank=True)
     github_skill_evidence = models.JSONField(default=dict, blank=True)
+    # Public repository name/description/URL saved when the owner links GitHub.
+    github_projects = models.JSONField(default=list, blank=True)
+    # Opt-in: other signed-in students may see github_projects only when True.
+    share_github_projects = models.BooleanField(default=False)
     privacy_consent_at = models.DateTimeField(null=True, blank=True)
     privacy_policy_version = models.CharField(max_length=40, blank=True)
     color = models.CharField(max_length=20, default="violet")
@@ -31,6 +36,11 @@ class StudentProfile(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def display_email(self):
+        """Use the account email for a member's own profile, demo address otherwise."""
+        return self.owner.email if self.owner_id else self.contact_email
 
 
 class TeamAnalysis(models.Model):

@@ -8,6 +8,7 @@ TIMEOUT = 10
 MAX_REPOS = 5
 MAX_FILES_PER_REPO = 3
 MAX_FILE_BYTES = 45000
+MAX_DESCRIPTION_CHARS = 160
 
 LANGUAGE_SKILLS = {
     "Python": ["python"], "JavaScript": ["javascript"], "TypeScript": ["javascript", "react"],
@@ -71,6 +72,7 @@ def analyze_github_user(username):
         repo_rows.append({
             "name": repo.get("name", ""),
             "url": repo.get("html_url", ""),
+            "description": " ".join((repo.get("description") or "").split())[:MAX_DESCRIPTION_CHARS],
             "language": repo.get("language") or "Not detected",
             "updated_at": (repo.get("updated_at") or "")[:10],
         })
@@ -130,5 +132,5 @@ def analyze_github_user(username):
         "public_repos": user.get("public_repos", len(repo_rows)),
         "repositories": repo_rows,
         "inferred_skills": inferred,
-        "note": "Repository metadata and a bounded sample of public source files were inspected. These are weak signals of demonstrated activity, not proof of authorship, proficiency, or contribution. Forks are excluded from the displayed list. No repository descriptions are displayed.",
+        "note": "Repository metadata and a bounded sample of public source files were inspected. These are weak signals of demonstrated activity, not proof of authorship, proficiency, or contribution. Forks are excluded from the displayed list. Repository descriptions are shown as written by the repository owner.",
     }
