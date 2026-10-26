@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
+from . import collaboration as collab
 from .ai_service import analyze_problem
 from .github_service import analyze_github_user, GitHubServiceError
 from .models import StudentProfile, TeamAnalysis
@@ -18,7 +19,9 @@ def _label(skill):
 
 
 def _visible_students(user):
-    return StudentProfile.objects.filter(Q(is_demo=True) | Q(owner=user)).distinct()
+    """Demo profiles, the user's own profile, and verified students who haven't hidden themselves."""
+    discoverable = Q(owner__isnull=False, owner__is_active=True, is_demo=False, is_discoverable=True)
+    return StudentProfile.objects.filter(Q(is_demo=True) | Q(owner=user) | discoverable).distinct()
 
 
 def _safe_projects(repositories):
@@ -53,7 +56,10 @@ def _dashboard_context(request, analysis=None, idea=None, title=None, selected_i
         title = "Campus Opportunity AI"
     return {
         "students": students, "team": team, "selected_ids": selected_ids,
-        "my_projects": list(TeamAnalysis.objects.filter(owner=request.user)[:8]),
+        "my_projects": list(TeamAnalysis.objects.filter(memberships__user=request.user).distinct()
+                            .prefetch_related("memberships__user__student_profile")[:8]),
+        "open_projects": collab.open_projects_for(request.user),
+        "is_dashboard": True,
         "community_projects": _community_projects(request.user),
         "idea": idea, "title": title, "analysis": analysis,
         "ai_configured": bool(os.getenv("GROQ_API_KEY", "").strip()),
@@ -117,13 +123,15 @@ def dashboard(request):
                     "source": requirements.get("analysis_source", "rules"),
                     "ai_notice": ai_notice,
                 }
-                TeamAnalysis.objects.create(
+                project = TeamAnalysis.objects.create(
                     owner=request.user, title=title, problem_statement=idea,
                     selected_students=[s.slug for s in students],
                     required_skills=analysis["required"], covered_skills=analysis["covered"],
                     missing_skills=analysis["gaps"], coverage_score=score,
                     analysis_source=analysis["source"],
                 )
+                collab.ensure_owner_membership(project)
+                analysis["project_id"] = project.pk
     elif request.method == "POST":
         selected_ids = request.POST.getlist("team") or ["maya", "arjun", "isha"]
         idea = request.POST.get("idea", "").strip()[:8000] or None

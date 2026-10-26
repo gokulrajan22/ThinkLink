@@ -5,14 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from .models import StudentProfile
+from .models import SEMESTER_CHOICES, StudentProfile
 from .views_skill_catalog import SKILL_CATALOG
 
 
 class ProfileForm(forms.Form):
     name = forms.CharField(max_length=120)
     college = forms.CharField(max_length=160)
-    year = forms.CharField(max_length=80, required=False)
+    semester = forms.TypedChoiceField(choices=[("", "Select semester")] + SEMESTER_CHOICES, coerce=int,
+                                      empty_value=None, required=False)
     contribution = forms.CharField(max_length=120, required=False)
     availability = forms.CharField(max_length=160, required=False)
     interests = forms.CharField(max_length=500, required=False, help_text="Separate interests with commas.")
@@ -21,6 +22,8 @@ class ProfileForm(forms.Form):
         help_text="One skill per line as skill-id=level (1–5), e.g. python=3 or machine learning=4.",
         widget=forms.Textarea(attrs={"rows": 7}),
     )
+    is_discoverable = forms.BooleanField(required=False, label="Show me in the student directory so other students can message or invite me.")
+    email_notifications = forms.BooleanField(required=False, label="Email me about invites, join requests, and new messages.")
     share_github_projects = forms.BooleanField(required=False, label="Show my saved public GitHub projects to other signed-in students.")
     clear_github_evidence = forms.BooleanField(required=False, label="Remove my saved GitHub username, projects, and derived evidence.")
 
@@ -63,10 +66,12 @@ def edit_profile(request):
         messages.error(request, "Your student profile could not be found. Please contact support.")
         return redirect("dashboard")
     initial = {
-        "name": profile.name, "college": profile.college, "year": profile.year,
+        "name": profile.name, "college": profile.college, "semester": profile.semester or "",
         "contribution": profile.contribution, "availability": profile.availability,
         "interests": ", ".join(profile.interests or []),
         "skills_text": "\n".join(f"{key}={level}" for key, level in (profile.skills or {}).items()),
+        "is_discoverable": profile.is_discoverable,
+        "email_notifications": profile.email_notifications,
         "share_github_projects": profile.share_github_projects,
         "clear_github_evidence": False,
     }
@@ -76,11 +81,13 @@ def edit_profile(request):
         profile.name = data["name"].strip()
         profile.initials = "".join(part[0] for part in profile.name.split()[:2]).upper()[:8] or "TL"
         profile.college = data["college"].strip()
-        profile.year = data["year"].strip()
+        profile.semester = data["semester"]
         profile.contribution = data["contribution"].strip()
         profile.availability = data["availability"].strip()
         profile.interests = [item.strip() for item in data["interests"].split(",") if item.strip()]
         profile.skills = form.cleaned_skills
+        profile.is_discoverable = data["is_discoverable"]
+        profile.email_notifications = data["email_notifications"]
         profile.share_github_projects = data["share_github_projects"]
         if data["clear_github_evidence"]:
             profile.github_username = ""
@@ -88,9 +95,9 @@ def edit_profile(request):
             profile.github_projects = []
             profile.share_github_projects = False
         profile.save(update_fields=[
-            "name", "initials", "college", "year", "contribution", "availability",
+            "name", "initials", "college", "semester", "contribution", "availability",
             "interests", "skills", "github_username", "github_skill_evidence", "github_projects",
-            "share_github_projects", "updated_at",
+            "share_github_projects", "is_discoverable", "email_notifications", "updated_at",
         ])
         messages.success(request, "Your ThinkLink profile was updated.")
         return redirect("dashboard")

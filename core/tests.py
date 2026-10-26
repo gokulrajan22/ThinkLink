@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
-from core.models import StudentProfile, TeamAnalysis
+from django.core import mail
+from core.models import (Conversation, Message, Notification, ProjectMembership, StudentProfile,
+                         TeamAnalysis, TeamInvite)
 from core.ai_service import analyze_problem
 
 
@@ -12,7 +14,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.user = User.objects.create_user(username="test-user", email="test@example.com", password="Strong-test-password-2026")
         self.student = StudentProfile.objects.create(
             owner=self.user, slug="test-student", name="Test Student", initials="TS",
-            college="Test College", year="2nd year", skills={"python": 3, "research": 2},
+            college="Test College", semester=3, skills={"python": 3, "research": 2},
             interests=["AI"], availability="Weekends", contribution="Backend", is_demo=False,
         )
         self.client.force_login(self.user)
@@ -33,7 +35,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.client.logout()
         response = self.client.post("/accounts/signup/", {
             "username": "new-student", "full_name": "New Student", "email": "new@example.com",
-            "college": "Test College", "year": "1st year",
+            "college": "Test College", "semester": "1",
             "password1": "Long-secure-passphrase-2026", "password2": "Long-secure-passphrase-2026",
             "privacy_consent": "on",
         })
@@ -55,7 +57,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
 
     def test_profile_edit_updates_only_the_signed_in_users_profile(self):
         response = self.client.post("/profile/", {
-            "name": "Updated Student", "college": "Test College", "year": "3rd year",
+            "name": "Updated Student", "college": "Test College", "semester": "5",
             "contribution": "Backend", "availability": "Weekends",
             "interests": "AI, accessibility", "skills_text": "python=4\nresearch=3",
         })
@@ -211,3 +213,145 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.assertEqual(response["Location"], "/accounts/login/")
         login_page = self.client.get("/accounts/login/")
         self.assertContains(login_page, "If that address has an unverified ThinkLink account")
+
+
+def make_student(username, discoverable=True, active=True):
+    user = User.objects.create_user(username=username, email=f"{username}@example.com",
+                                    password="Strong-test-password-2026", is_active=active)
+    StudentProfile.objects.create(owner=user, slug=username, name=username.title(), initials=username[:2].upper(),
+                                  is_demo=False, is_discoverable=discoverable)
+    return user
+
+
+class CollaborationTests(TestCase):
+    def setUp(self):
+        self.owner = make_student("owner")
+        self.alice = make_student("alice")
+        self.hidden = make_student("hidden", discoverable=False)
+        self.project = TeamAnalysis.objects.create(owner=self.owner, title="Campus AI", problem_statement="Idea")
+        ProjectMembership.objects.create(project=self.project, user=self.owner, role="owner")
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def invite(self, user, student, project=None):
+        self.login(user)
+        return self.client.post("/invites/send/", {"project_id": (project or self.project).pk, "student": student})
+
+    def test_directory_shows_discoverable_but_not_hidden_or_unverified(self):
+        make_student("pending", active=False)
+        self.login(self.owner)
+        page = self.client.get("/").content.decode()
+        self.assertIn("Alice", page)
+        self.assertNotIn("Hidden", page)
+        self.assertNotIn("Pending", page)
+        self.assertNotIn("alice@example.com", page)  # other students' account emails stay private
+        self.assertIn("owner@example.com", page)  # own email still shown
+
+    def test_only_owner_can_invite_and_hidden_users_cannot_be_invited(self):
+        self.assertEqual(self.invite(self.alice, "owner").status_code, 404)  # alice does not own the project
+        self.invite(self.owner, "hidden")
+        self.assertFalse(TeamInvite.objects.exists())
+        self.invite(self.owner, "alice")
+        self.assertEqual(TeamInvite.objects.filter(recipient=self.alice, status="pending").count(), 1)
+        self.invite(self.owner, "alice")  # duplicate pending invite is rejected
+        self.assertEqual(TeamInvite.objects.count(), 1)
+
+    def test_accept_invite_creates_membership_and_team_chat(self):
+        self.invite(self.owner, "alice")
+        invite = TeamInvite.objects.get()
+        self.assertTrue(Notification.objects.filter(user=self.alice, kind="invite").exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.login(self.owner)  # the sender cannot accept on the recipient's behalf
+        self.assertEqual(self.client.post(f"/invites/{invite.pk}/accept/").status_code, 404)
+        self.login(self.alice)
+        self.client.post(f"/invites/{invite.pk}/accept/")
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=self.alice).exists())
+        conversation = Conversation.objects.get(project=self.project)
+        self.assertEqual(set(conversation.members.values_list("user__username", flat=True)), {"owner", "alice"})
+        self.assertEqual(self.client.get(f"/projects/{self.project.pk}/").status_code, 200)
+
+    def test_join_request_requires_open_project_and_owner_response(self):
+        self.login(self.alice)
+        self.assertEqual(self.client.post(f"/projects/{self.project.pk}/request/").status_code, 404)
+        self.project.is_open = True
+        self.project.save()
+        self.client.post(f"/projects/{self.project.pk}/request/", {"message": "I know React"})
+        join = TeamInvite.objects.get(kind="request")
+        self.assertEqual(join.recipient, self.owner)
+        self.assertEqual(self.client.post(f"/invites/{join.pk}/accept/").status_code, 404)
+        self.login(self.owner)
+        self.client.post(f"/invites/{join.pk}/accept/")
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=self.alice).exists())
+
+    def test_non_members_cannot_read_or_post_in_conversations(self):
+        self.login(self.owner)
+        self.client.post("/messages/new/alice/")
+        conversation = Conversation.objects.get(project=None)
+        self.client.post(f"/messages/{conversation.pk}/send/", {"body": "<script>alert(1)</script>"})
+        outsider = make_student("outsider")
+        self.login(outsider)
+        for url in (f"/messages/{conversation.pk}/", f"/messages/{conversation.pk}/poll/"):
+            self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.post(f"/messages/{conversation.pk}/send/", {"body": "hi"}).status_code, 404)
+        self.login(self.alice)
+        page = self.client.get(f"/messages/{conversation.pk}/")
+        self.assertContains(page, "&lt;script&gt;alert(1)&lt;/script&gt;")
+        self.assertNotContains(page, "<script>alert(1)</script>")
+
+    def test_cannot_start_dm_with_hidden_or_demo_student(self):
+        StudentProfile.objects.create(slug="demo-x", name="Demo", initials="DX", is_demo=True)
+        self.login(self.alice)
+        self.client.post("/messages/new/hidden/")
+        self.assertEqual(self.client.post("/messages/new/demo-x/").status_code, 404)
+        self.assertFalse(Conversation.objects.exists())
+
+    def test_message_notifications_collapse_and_email_once_per_hour(self):
+        self.login(self.owner)
+        self.client.post("/messages/new/alice/")
+        conversation = Conversation.objects.get()
+        for text in ("one", "two", "three"):
+            response = self.client.post(f"/messages/{conversation.pk}/send/", {"body": text},
+                                        HTTP_ACCEPT="application/json")
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(Message.objects.count(), 3)
+        self.assertEqual(Notification.objects.filter(user=self.alice, kind="message").count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.login(self.alice)
+        self.assertEqual(self.client.get("/api/v1/notifications/summary/").json()["unread_messages"], 3)
+        polled = self.client.get(f"/messages/{conversation.pk}/poll/?after=0").json()["messages"]
+        self.assertEqual([m["body"] for m in polled], ["one", "two", "three"])
+        self.assertEqual(self.client.get("/api/v1/notifications/summary/").json()["unread_messages"], 0)
+
+    def test_email_notifications_can_be_turned_off(self):
+        StudentProfile.objects.filter(owner=self.alice).update(email_notifications=False)
+        self.invite(self.owner, "alice")
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertTrue(Notification.objects.filter(user=self.alice).exists())
+
+    def test_message_length_is_capped(self):
+        self.login(self.owner)
+        self.client.post("/messages/new/alice/")
+        conversation = Conversation.objects.get()
+        response = self.client.post(f"/messages/{conversation.pk}/send/", {"body": "x" * 2001},
+                                    HTTP_ACCEPT="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Message.objects.exists())
+
+    def test_notification_open_marks_read_and_only_redirects_internally(self):
+        note = Notification.objects.create(user=self.alice, kind="x", text="t", link="//evil.example")
+        self.login(self.alice)
+        response = self.client.get(f"/notifications/{note.pk}/open/")
+        self.assertEqual(response["Location"], "/notifications/")
+        note.refresh_from_db()
+        self.assertTrue(note.is_read)
+        self.login(self.owner)
+        self.assertEqual(self.client.get(f"/notifications/{note.pk}/open/").status_code, 404)
+
+    def test_only_owner_can_open_project(self):
+        self.login(self.alice)
+        self.assertEqual(self.client.post(f"/projects/{self.project.pk}/open/").status_code, 404)
+        self.login(self.owner)
+        self.client.post(f"/projects/{self.project.pk}/open/")
+        self.project.refresh_from_db()
+        self.assertTrue(self.project.is_open)

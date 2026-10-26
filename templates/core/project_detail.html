@@ -1,0 +1,20 @@
+{% extends 'core/app_base.html' %}
+{% block title %}{{ project.title }} · ThinkLink{% endblock %}{% block breadcrumb %}Team{% endblock %}
+{% block content %}<section class="page-content collab-page">
+<div class="section-heading"><div><div class="section-kicker">PROJECT TEAM</div><h2>{{ project.title }}</h2><p>{{ project.problem_statement|truncatechars:220 }}</p></div>
+<a class="primary-button small" href="{% url 'project-chat' project.pk %}">Open team chat →</a></div>
+{% if is_owner %}<div class="panel open-toggle"><div><strong>{% if project.is_open %}Open to join requests{% else %}Closed to join requests{% endif %}</strong><p>{% if project.is_open %}Other students can see this project's title, brief, and missing skills, and ask to join.{% else %}Only people you invite can join.{% endif %}</p></div>
+<form method="post" action="{% url 'project-toggle-open' project.pk %}">{% csrf_token %}<button class="secondary-button" type="submit">{% if project.is_open %}Close project{% else %}Open project{% endif %}</button></form></div>{% endif %}
+<h3 class="collab-subhead">Members</h3>
+<div class="collab-list">{% for m in members %}<div class="panel member-row"><span class="avatar avatar-{{ m.user.student_profile.color|default:'violet' }}">{{ m.user.username|slice:":2"|upper }}</span><div><strong>{{ m.user.student_profile.name|default:m.user.username }}</strong><small>{{ m.get_role_display }} · {{ m.user.student_profile.contribution|default:"Student" }}</small></div></div>{% endfor %}</div>
+{% if is_owner %}
+{% if pending %}<h3 class="collab-subhead">Pending</h3><div class="collab-list">{% for inv in pending %}<div class="history-row">{% if inv.kind == 'invite' %}Invited {{ inv.recipient.student_profile.name|default:inv.recipient.username }}{% else %}{{ inv.sender.student_profile.name|default:inv.sender.username }} asked to join — answer it on <a href="{% url 'invites' %}">Invites</a>{% endif %}</div>{% endfor %}</div>{% endif %}
+<h3 class="collab-subhead">Invite students</h3>
+<div class="collab-list">{% for c in candidates %}<form class="panel invite-row" method="post" action="{% url 'invite-send' %}">{% csrf_token %}
+<input type="hidden" name="project_id" value="{{ project.pk }}"><input type="hidden" name="student" value="{{ c.slug }}"><input type="hidden" name="next" value="{{ request.path }}">
+<span class="avatar avatar-{{ c.color }}">{{ c.initials }}</span><div class="invite-copy"><strong>{{ c.name }}</strong><small>{{ c.contribution|default:"Student" }}{% if c.semester %} · {{ c.semester_label }}{% endif %}</small>
+<span class="skill-chips">{% for skill, level in c.skills.items %}{% if forloop.counter <= 3 %}<i>{{ skill }}</i>{% endif %}{% endfor %}</span></div>
+<input class="text-input invite-note" name="message" maxlength="300" placeholder="Add a note (optional)"><button class="secondary-button" type="submit">Invite</button></form>
+{% empty %}<p class="github-muted">No other students are visible in the directory yet.</p>{% endfor %}</div>
+{% endif %}
+{% include "core/_footer.html" %}</section>{% endblock %}

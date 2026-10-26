@@ -8,10 +8,12 @@ from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from .models import StudentProfile, TeamAnalysis
+from django.db.models import Q
+
+from .models import Message, Notification, ProjectMembership, StudentProfile, TeamAnalysis, TeamInvite
 
 
-PRIVACY_POLICY_VERSION = "2026-10-26"
+PRIVACY_POLICY_VERSION = "2026-10-26.2"
 
 
 def privacy_notice(request):
@@ -29,13 +31,15 @@ def export_my_data(request):
                     "full_name": request.user.get_full_name(), "date_joined": request.user.date_joined.isoformat(),
                     "email_verified": request.user.is_active},
         "profile": None if profile is None else {
-            "name": profile.name, "college": profile.college, "year": profile.year,
+            "name": profile.name, "college": profile.college, "semester": profile.semester,
             "skills": profile.skills, "interests": profile.interests,
             "availability": profile.availability, "contribution": profile.contribution,
             "github_username": profile.github_username,
             "github_skill_evidence": profile.github_skill_evidence,
             "github_projects": profile.github_projects,
             "share_github_projects": profile.share_github_projects,
+            "is_discoverable": profile.is_discoverable,
+            "email_notifications": profile.email_notifications,
             "privacy_consent_at": profile.privacy_consent_at.isoformat() if profile.privacy_consent_at else None,
             "privacy_policy_version": profile.privacy_policy_version,
             "created_at": profile.created_at.isoformat(), "updated_at": profile.updated_at.isoformat(),
@@ -47,6 +51,20 @@ def export_my_data(request):
             "coverage_score": item.coverage_score, "analysis_source": item.analysis_source,
             "created_at": item.created_at.isoformat(),
         } for item in analyses],
+        "project_memberships": [{
+            "project": m.project.title, "role": m.role, "joined_at": m.joined_at.isoformat(),
+        } for m in ProjectMembership.objects.filter(user=request.user).select_related("project")],
+        "invites": [{
+            "project": i.project.title, "kind": i.kind, "status": i.status, "message": i.message,
+            "direction": "sent" if i.sender_id == request.user.pk else "received",
+            "created_at": i.created_at.isoformat(),
+        } for i in TeamInvite.objects.filter(Q(sender=request.user) | Q(recipient=request.user)).select_related("project")],
+        "messages_sent": [{
+            "conversation_id": m.conversation_id, "body": m.body, "created_at": m.created_at.isoformat(),
+        } for m in Message.objects.filter(sender=request.user)],
+        "notifications": [{
+            "kind": n.kind, "text": n.text, "is_read": n.is_read, "created_at": n.created_at.isoformat(),
+        } for n in Notification.objects.filter(user=request.user)],
     }
     response = HttpResponse(json.dumps(payload, ensure_ascii=False, indent=2), content_type="application/json; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="thinklink-personal-data.json"'
