@@ -11,7 +11,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 _DEFAULT_DEVELOPMENT_SECRET = "thinklink-local-demo-key-change-before-deployment"
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", _DEFAULT_DEVELOPMENT_SECRET)
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in {"1", "true", "yes"}
+# Default to production mode on Vercel so missing env vars fail closed instead of serving debug pages.
+DEBUG = os.getenv("DJANGO_DEBUG", "False" if os.getenv("VERCEL") else "True").lower() in {"1", "true", "yes"}
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host.strip()]
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 if not DEBUG and (not CSRF_TRUSTED_ORIGINS or any(not origin.startswith("https://") for origin in CSRF_TRUSTED_ORIGINS)):
