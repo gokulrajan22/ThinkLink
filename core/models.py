@@ -2,6 +2,9 @@ from django.conf import settings
 from django.db import models
 
 
+SEMESTER_CHOICES = [(n, f"Semester {n}") for n in range(1, 9)]
+
+
 class StudentProfile(models.Model):
     """Student profile. Skill levels are self-reported, not verified."""
     owner = models.OneToOneField(
@@ -13,7 +16,7 @@ class StudentProfile(models.Model):
     initials = models.CharField(max_length=8)
     contact_email = models.EmailField(max_length=254, blank=True)
     college = models.CharField(max_length=160, default="ThinkLink Campus")
-    year = models.CharField(max_length=80, blank=True)
+    semester = models.PositiveSmallIntegerField(null=True, blank=True, choices=SEMESTER_CHOICES)
     skills = models.JSONField(default=dict, blank=True)
     interests = models.JSONField(default=list, blank=True)
     availability = models.CharField(max_length=160, blank=True)
@@ -39,6 +42,10 @@ class StudentProfile(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def semester_label(self):
+        return f"Semester {self.semester}" if self.semester else ""
 
     @property
     def display_email(self):

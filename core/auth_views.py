@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 
-from .models import StudentProfile
+from .models import SEMESTER_CHOICES, StudentProfile
 from .privacy_views import PRIVACY_POLICY_VERSION
 from .security import rate_limit
 
@@ -26,7 +26,8 @@ class SignUpForm(forms.Form):
     full_name = forms.CharField(max_length=120)
     email = forms.EmailField()
     college = forms.CharField(max_length=160)
-    year = forms.CharField(max_length=80, required=False)
+    semester = forms.TypedChoiceField(choices=[("", "Select semester")] + SEMESTER_CHOICES, coerce=int,
+                                      empty_value=None, required=False)
     password1 = forms.CharField(min_length=10, widget=forms.PasswordInput)
     password2 = forms.CharField(min_length=10, widget=forms.PasswordInput)
     privacy_consent = forms.BooleanField(required=True, label="I have read the Privacy Notice and consent to ThinkLink processing my profile and submitted project brief to provide team-analysis features.")
@@ -96,7 +97,7 @@ def sign_up(request):
             initials = "".join(part[0] for part in name.split()[:2]).upper()[:8] or "TL"
             StudentProfile.objects.create(
                 owner=user, slug=slug, name=name, initials=initials,
-                college=data["college"].strip(), year=data["year"].strip(),
+                college=data["college"].strip(), semester=data["semester"],
                 is_demo=False, color="violet", privacy_consent_at=__import__("django.utils.timezone", fromlist=["now"]).now(),
                 privacy_policy_version=PRIVACY_POLICY_VERSION,
             )

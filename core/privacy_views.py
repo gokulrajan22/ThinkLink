@@ -31,7 +31,7 @@ def export_my_data(request):
                     "full_name": request.user.get_full_name(), "date_joined": request.user.date_joined.isoformat(),
                     "email_verified": request.user.is_active},
         "profile": None if profile is None else {
-            "name": profile.name, "college": profile.college, "year": profile.year,
+            "name": profile.name, "college": profile.college, "semester": profile.semester,
             "skills": profile.skills, "interests": profile.interests,
             "availability": profile.availability, "contribution": profile.contribution,
             "github_username": profile.github_username,

@@ -5,14 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from .models import StudentProfile
+from .models import SEMESTER_CHOICES, StudentProfile
 from .views_skill_catalog import SKILL_CATALOG
 
 
 class ProfileForm(forms.Form):
     name = forms.CharField(max_length=120)
     college = forms.CharField(max_length=160)
-    year = forms.CharField(max_length=80, required=False)
+    semester = forms.TypedChoiceField(choices=[("", "Select semester")] + SEMESTER_CHOICES, coerce=int,
+                                      empty_value=None, required=False)
     contribution = forms.CharField(max_length=120, required=False)
     availability = forms.CharField(max_length=160, required=False)
     interests = forms.CharField(max_length=500, required=False, help_text="Separate interests with commas.")
@@ -65,7 +66,7 @@ def edit_profile(request):
         messages.error(request, "Your student profile could not be found. Please contact support.")
         return redirect("dashboard")
     initial = {
-        "name": profile.name, "college": profile.college, "year": profile.year,
+        "name": profile.name, "college": profile.college, "semester": profile.semester or "",
         "contribution": profile.contribution, "availability": profile.availability,
         "interests": ", ".join(profile.interests or []),
         "skills_text": "\n".join(f"{key}={level}" for key, level in (profile.skills or {}).items()),
@@ -80,7 +81,7 @@ def edit_profile(request):
         profile.name = data["name"].strip()
         profile.initials = "".join(part[0] for part in profile.name.split()[:2]).upper()[:8] or "TL"
         profile.college = data["college"].strip()
-        profile.year = data["year"].strip()
+        profile.semester = data["semester"]
         profile.contribution = data["contribution"].strip()
         profile.availability = data["availability"].strip()
         profile.interests = [item.strip() for item in data["interests"].split(",") if item.strip()]
@@ -94,7 +95,7 @@ def edit_profile(request):
             profile.github_projects = []
             profile.share_github_projects = False
         profile.save(update_fields=[
-            "name", "initials", "college", "year", "contribution", "availability",
+            "name", "initials", "college", "semester", "contribution", "availability",
             "interests", "skills", "github_username", "github_skill_evidence", "github_projects",
             "share_github_projects", "is_discoverable", "email_notifications", "updated_at",
         ])

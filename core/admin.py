@@ -4,7 +4,7 @@ from .models import Message, Notification, ProjectMembership, StudentProfile, Te
 
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
-    list_display = ("name", "college", "year", "contribution", "github_username", "is_demo", "updated_at")
+    list_display = ("name", "college", "semester", "contribution", "github_username", "is_demo", "updated_at")
     list_filter = ("college", "is_demo")
     search_fields = ("name", "college", "github_username", "contribution")
     readonly_fields = ("created_at", "updated_at")

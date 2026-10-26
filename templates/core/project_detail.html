@@ -12,7 +12,7 @@
 <h3 class="collab-subhead">Invite students</h3>
 <div class="collab-list">{% for c in candidates %}<form class="panel invite-row" method="post" action="{% url 'invite-send' %}">{% csrf_token %}
 <input type="hidden" name="project_id" value="{{ project.pk }}"><input type="hidden" name="student" value="{{ c.slug }}"><input type="hidden" name="next" value="{{ request.path }}">
-<span class="avatar avatar-{{ c.color }}">{{ c.initials }}</span><div class="invite-copy"><strong>{{ c.name }}</strong><small>{{ c.contribution|default:"Student" }}{% if c.year %} · {{ c.year }}{% endif %}</small>
+<span class="avatar avatar-{{ c.color }}">{{ c.initials }}</span><div class="invite-copy"><strong>{{ c.name }}</strong><small>{{ c.contribution|default:"Student" }}{% if c.semester %} · {{ c.semester_label }}{% endif %}</small>
 <span class="skill-chips">{% for skill, level in c.skills.items %}{% if forloop.counter <= 3 %}<i>{{ skill }}</i>{% endif %}{% endfor %}</span></div>
 <input class="text-input invite-note" name="message" maxlength="300" placeholder="Add a note (optional)"><button class="secondary-button" type="submit">Invite</button></form>
 {% empty %}<p class="github-muted">No other students are visible in the directory yet.</p>{% endfor %}</div>

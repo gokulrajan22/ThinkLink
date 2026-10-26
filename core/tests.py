@@ -14,7 +14,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.user = User.objects.create_user(username="test-user", email="test@example.com", password="Strong-test-password-2026")
         self.student = StudentProfile.objects.create(
             owner=self.user, slug="test-student", name="Test Student", initials="TS",
-            college="Test College", year="2nd year", skills={"python": 3, "research": 2},
+            college="Test College", semester=3, skills={"python": 3, "research": 2},
             interests=["AI"], availability="Weekends", contribution="Backend", is_demo=False,
         )
         self.client.force_login(self.user)
@@ -35,7 +35,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
         self.client.logout()
         response = self.client.post("/accounts/signup/", {
             "username": "new-student", "full_name": "New Student", "email": "new@example.com",
-            "college": "Test College", "year": "1st year",
+            "college": "Test College", "semester": "1",
             "password1": "Long-secure-passphrase-2026", "password2": "Long-secure-passphrase-2026",
             "privacy_consent": "on",
         })
@@ -57,7 +57,7 @@ class ThinkLinkAuthAndAccessTests(TestCase):
 
     def test_profile_edit_updates_only_the_signed_in_users_profile(self):
         response = self.client.post("/profile/", {
-            "name": "Updated Student", "college": "Test College", "year": "3rd year",
+            "name": "Updated Student", "college": "Test College", "semester": "5",
             "contribution": "Backend", "availability": "Weekends",
             "interests": "AI, accessibility", "skills_text": "python=4\nresearch=3",
         })
